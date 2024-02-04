@@ -151,13 +151,16 @@
       //!= null時,就是該物件已經存在,觸發時,進行edit(update)
       //設定為全域變數
       //會在editItem()使用和submit監聽事件使用
-
+      var list_snapshot = [];
+      // 用來處理刪除task停格畫面的解方
+      //
       //1.用DOM將buildList建立的任務列表遷入該區塊,並在create和delete時,將資料傳到api的view中
       //  對資料庫進行更改
       buildList(); // 寫完buildList測試和submit監聽事件測試
       function buildList() {
         var wrapper = document.getElementById("list-wrapper");
-        wrapper.innerHTML = "";
+        // wrapper.innerHTML = "";
+
         var url = "http://127.0.0.1:8000/api/task-list/";
 
         fetch(url)
@@ -166,28 +169,40 @@
             console.log("Data:", data);
             // fetch到task-list的資料,以JSON解析,console.log確認
             var list = data;
+            //更新data現況
             for (var i in list) {
+              //這組try/catch讓刪除任務時,可以不會有refresh的停頓感,但會造成刪除的任務留存在畫面,並一個一個佔據現有的task造成500錯誤
+              try {
+                document.getElementById(`data-row-${i}`).remove();
+              } catch (err) {}
               var title = `<span class="title">${list[i].title}</span>`;
               if (list[i].completed == true) {
                 var title = `<strike class="title">${list[i].title}</strike>`;
               }
               //列出所有task-list迴圈的部分
               var item = `
-						<div id="data-row-${i}" class="task-wrapper flex-wrapper">
-							<div style="flex:7">
-								${title}
-							</div>
-							<div style="flex:1">
-								<button class="btn btn-sm btn-outline-info edit">Edit </button>
-							</div>
-							<div style="flex:1">
-								<button class="btn btn-sm btn-outline-dark delete">-</button>
-							</div>
-						</div>
-					`;
+      	<div id="data-row-${i}" class="task-wrapper flex-wrapper">
+      		<div style="flex:7">
+      			${title}
+      		</div>
+      		<div style="flex:1">
+      			<button class="btn btn-sm btn-outline-info edit">Edit </button>
+      		</div>
+      		<div style="flex:1">
+      			<button class="btn btn-sm btn-outline-dark delete">-</button>
+      		</div>
+      	</div>
+      `;
               wrapper.innerHTML += item;
             }
-
+            //7.利用全域變數list_snapshot陣列中的長度來處理,停格畫面的反效果
+            if (list_snapshot.length > list.length) {
+              for (var i = list.length; i < list_snapshot.length; i++) {
+                document.getElementById(`data-row-${i}`).remove();
+              }
+            }
+            list_snapshot = list;
+            //
             //透過迴圈,透過i,讓每一個任務的edit點擊事件都能被觸發
             for (var i in list) {
               var editBtn = document.getElementsByClassName("edit")[i];
@@ -274,7 +289,7 @@
         });
       }
 
-      //5.標題點擊事件
+      //6.標題點擊事件
       function strikeUnstrike(item) {
         console.log("Strike clicked");
 
