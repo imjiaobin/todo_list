@@ -279,6 +279,7 @@
         console.log("Strike clicked");
 
         item.completed = !item.completed;
+        //進行strikeUnstrike的操作
         fetch(`http://127.0.0.1:8000/api/task-update/${item.id}/`, {
           method: "POST",
           headers: {
