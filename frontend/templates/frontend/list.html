@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>TO DO</title>
+    <meta charset="utf-8" />
+    <link
+      rel="stylesheet"
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css"
+      integrity="sha384-Vkoo8x4CGsO3+Hhxv8T/Q5PaXtkKtu6ug5TOeNV6gBiFeWPGFN9MuhOf23Q9Ifjh"
+      crossorigin="anonymous"
+    />
+    <link
+      href="https://fonts.googleapis.com/css?family=Montserrat&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="" />
+    <style type="text/css">
+      body {
+        background: rgb(179, 121, 51);
+        background: -o-linear-gradient(
+          90deg,
+          rgb(100, 63, 18) 0%,
+          rgba(198, 138, 59, 1) 43%,
+          rgb(53, 32, 4) 100%
+        );
+      }
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      span,
+      strike {
+        font-family: "Montserrat", sans-serif;
+      }
+
+      #task-container {
+        max-width: 600px;
+        margin: 0 auto;
+        box-shadow: 0 14px 28px rgba(0, 0, 0, 0.25),
+          0 10px 10px rgba(0, 0, 0, 0.22);
+        background-color: #fff;
+
+        margin-top: 100px;
+        margin-bottom: 100px;
+
+        justify-content: space-around;
+        align-items: flex-start;
+      }
+
+      #form-wrapper {
+        position: -webkit-sticky;
+        position: sticky;
+        top: 0rem;
+        border-bottom: 1px solid #e9e9e9;
+        background-color: #fff;
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.25);
+        padding: 40px;
+      }
+
+      #submit {
+        background-color: #ab8e49;
+        border-radius: 0;
+        border: 0;
+        color: #fff;
+      }
+      .flex-wrapper {
+        display: flex;
+      }
+
+      .task-wrapper {
+        margin: 5px;
+        padding: 5px;
+        padding: 20px;
+        cursor: pointer;
+        border-bottom: 1px solid #e9e9e9;
+        color: #686868;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="container">
+      <div id="task-container">
+        <div id="form-wrapper">
+          <form id="form">
+            <div class="flex-wrapper">
+              <div style="flex: 6">
+                <!-- 用這邊的input的id='title'去取點擊事件的DOM -->
+                <input
+                  id="title"
+                  class="form-control"
+                  type="text"
+                  name="title"
+                  placeholder="加入新待辦事項"
+                />
+              </div>
+              <div style="flex: 1">
+                <input id="submit" class="btn" type="submit" />
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div id="list-wrapper">
+          <!-- 這邊放入fetch出來的task-list -->
+        </div>
+      </div>
+    </div>
+
+    <script type="text/javascript">
+      // KEY COMPONENTS:
+      // 	"activeItem" = null until an edit button is clicked. Will contain object of item we are editing
+      // 	"list_snapshot" = Will contain previous state of list. Used for removing extra rows on list update
+
+      // 	PROCESS:
+      // 	1 - Fetch Data and build rows "buildList()"
+      // 	2 - Create Item on form submit
+      // 	3 - Edit Item click - Prefill form and change submit URL
+      // 	4 - Delete Item - Send item id to delete URL
+      // 	5 - Cross out completed task - Event handle updated item
+
+      // 	NOTES:
+      // 	-- Add event handlers to "edit", "delete", "title"
+      // 	-- Render with strike through items completed
+      // 	-- Remove extra data on re-render
+      // 	-- CSRF Token
+
+      //5.用這段官網原生的程式碼,使我們在POST時能生成csrftoken
+      //並在submit觸發的點擊事件中,fetch()的header加入
+      function getCookie(name) {
+        var cookieValue = null;
+        if (document.cookie && document.cookie !== "") {
+          var cookies = document.cookie.split(";");
+          for (var i = 0; i < cookies.length; i++) {
+            var cookie = cookies[i].trim();
+            // Does this cookie string begin with the name we want?
+            if (cookie.substring(0, name.length + 1) === name + "=") {
+              cookieValue = decodeURIComponent(
+                cookie.substring(name.length + 1)
+              );
+              break;
+            }
+          }
+        }
+        return cookieValue;
+      }
+      var csrftoken = getCookie("csrftoken");
+
+      var activeItem = null;
+      //null時,就是該task目前不存在,觸發時,建立新的任務(create)
+      //!= null時,就是該物件已經存在,觸發時,進行edit(update)
+      //設定為全域變數
+      //會在editItem()使用和submit監聽事件使用
+
+      //1.用DOM將buildList建立的任務列表遷入該區塊,並在create和delete時,將資料傳到api的view中
+      //  對資料庫進行更改
+      buildList(); // 寫完buildList測試和submit監聽事件測試
+      function buildList() {
+        var wrapper = document.getElementById("list-wrapper");
+        wrapper.innerHTML = "";
+        var url = "http://127.0.0.1:8000/api/task-list/";
+
+        fetch(url)
+          .then((resp) => resp.json())
+          .then(function (data) {
+            console.log("Data:", data);
+            // fetch到task-list的資料,以JSON解析,console.log確認
+            var list = data;
+            for (var i in list) {
+              var title = `<span class="title">${list[i].title}</span>`;
+              if (list[i].completed == true) {
+                var title = `<strike class="title">${list[i].title}</strike>`;
+              }
+              //列出所有task-list迴圈的部分
+              var item = `
+						<div id="data-row-${i}" class="task-wrapper flex-wrapper">
+							<div style="flex:7">
+								${title}
+							</div>
+							<div style="flex:1">
+								<button class="btn btn-sm btn-outline-info edit">Edit </button>
+							</div>
+							<div style="flex:1">
+								<button class="btn btn-sm btn-outline-dark delete">-</button>
+							</div>
+						</div>
+					`;
+              wrapper.innerHTML += item;
+            }
+
+            //透過迴圈,透過i,讓每一個任務的edit點擊事件都能被觸發
+            for (var i in list) {
+              var editBtn = document.getElementsByClassName("edit")[i];
+              var deleteBtn = document.getElementsByClassName("delete")[i];
+              var title = document.getElementsByClassName("title")[i];
+              editBtn.addEventListener(
+                "click",
+                (function (item) {
+                  return function () {
+                    editItem(item);
+                  };
+                })(list[i])
+              );
+
+              deleteBtn.addEventListener(
+                "click",
+                (function (item) {
+                  return function () {
+                    deleteItem(item);
+                  };
+                })(list[i])
+              );
+
+              title.addEventListener(
+                "click",
+                (function (item) {
+                  return function () {
+                    strikeUnstrike(item);
+                  };
+                })(list[i])
+              );
+            }
+          });
+      }
+
+      //2.點擊submit觸發的監聽事件
+      var form = document.getElementById("form-wrapper");
+      //點擊submit就觸發
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        console.log("Form submit");
+        var url = "http://127.0.0.1:8000/api/task-create/";
+
+        //以下這段if,是判斷,按下submit時,這個任務是已經有了的,就會進行Update
+        //如果submit的任務不存在taskList裡的話,就是進行create
+        //這邊帶入api的url,也會在js跑的過程中,一併觸發api中的view,同時更新資料庫
+        if (activeItem != null) {
+          var url = `http://127.0.0.1:8000/api/task-update/${activeItem.id}/`;
+          activeItem = null; //將全域變數更新回null
+        }
+        //
+        title = document.getElementById("title").value;
+        fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-type": "application/json",
+            "X-CSRFToken": csrftoken,
+          },
+          body: JSON.stringify({ title: title }),
+        }).then(function (response) {
+          buildList();
+          document.getElementById("form").reset();
+        });
+      });
+
+      //3.點擊edit的監聽事件
+      function editItem(item) {
+        console.log("Item clicked:", item);
+        activeItem = item;
+        document.getElementById("title").value = activeItem.title;
+      }
+
+      //4.點擊刪除的監聽事件
+      function deleteItem(item) {
+        console.log("Delete clicked");
+        fetch(`http://127.0.0.1:8000/api/task-delete/${item.id}/`, {
+          method: "DELETE",
+          headers: {
+            "Content-type": "application/json",
+            "X-CSRFToken": csrftoken,
+          },
+        }).then((response) => {
+          buildList();
+        });
+      }
+
+      //5.標題點擊事件
+      function strikeUnstrike(item) {
+        console.log("Strike clicked");
+
+        item.completed = !item.completed;
+        fetch(`http://127.0.0.1:8000/api/task-update/${item.id}/`, {
+          method: "POST",
+          headers: {
+            "Content-type": "application/json",
+            "X-CSRFToken": csrftoken,
+          },
+          body: JSON.stringify({
+            title: item.title,
+            completed: item.completed,
+          }),
+        }).then((response) => {
+          buildList();
+        });
+      }
+    </script>
+  </body>
+</html>
